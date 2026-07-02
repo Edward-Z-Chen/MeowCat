@@ -229,7 +229,7 @@ def main():
     ap.add_argument("--chunks-per-batch", type=int, default=1,
                     help="How many chunks to pack along batch dimension for a single forward.")
     ap.add_argument("--out-pkl-name", type=str,
-                    default="pred_fullgrid_outputs_multires.pkl",
+                    default="pred_fullgrid_outputs.pkl",
                     help="Name of output PKL written in the sample folder.")
     args = ap.parse_args()
 

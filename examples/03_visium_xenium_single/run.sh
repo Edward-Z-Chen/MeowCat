@@ -109,6 +109,15 @@ echo "[Step 4b] Xenium batch preparation"
 meowcat prepare-xenium-batches --config "$CFG"
 
 # ---------------------------------------------------------------------------
+# Step 4c: Xenium embeddings-hist (Xenium counterpart of prepare-visium)
+# prepare-visium builds embeddings-hist for VIS samples only, so the XEN
+# sample needs its dense [H,W,C] embeddings-hist grid built here for full-grid
+# prediction. Converts single_super_emb.h5ad -> embeddings-hist.pickle.
+# ---------------------------------------------------------------------------
+echo "[Step 4c] Xenium embeddings-hist"
+meowcat prepare-xenium --config "$CFG"
+
+# ---------------------------------------------------------------------------
 # Step 5: Train the model — 3-phase sequential
 # Activate: conda activate he_anno
 # Phase 0 (15 ep):  MSE reconstruction pretraining on masked UNI features

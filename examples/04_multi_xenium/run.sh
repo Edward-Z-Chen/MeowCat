@@ -91,6 +91,15 @@ echo "[Step 4] Xenium batch preparation"
 meowcat prepare-xenium-batches --config "$CFG"
 
 # ---------------------------------------------------------------------------
+# Step 4b: Xenium embeddings-hist (Xenium counterpart of prepare-visium)
+# Converts each sample's single_super_emb.h5ad -> embeddings-hist.pickle, the
+# dense [H,W,C] grid required by full-grid prediction. Depends only on
+# preprocess outputs (single_super_emb.h5ad + he.<ext>).
+# ---------------------------------------------------------------------------
+echo "[Step 4b] Xenium embeddings-hist — all samples"
+meowcat prepare-xenium --config "$CFG"
+
+# ---------------------------------------------------------------------------
 # Step 5: Train — Recon + Xenium CE + CDAN
 # Activate: conda activate he_anno
 # Phase 0 (15 ep):   reconstruction pretraining

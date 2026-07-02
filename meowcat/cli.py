@@ -10,12 +10,13 @@ Usage
 Steps (in pipeline order):
     infer                   Predict on new H&E images using a trained model
     rctd                    Step 1   — RCTD deconvolution (R)
-    prepare-visium          Step 1.5 — Visium metadata prep (anno_matrix, locs, radius files)
+    prepare-visium          Step 1.5 — Visium metadata + embeddings-hist (VIS samples)
     visualize-visium        Step 1.6 — QC: overlay Visium spots on processed H&E
     check-resolution        Step 2   — audit image resolutions
     preprocess              Step 3/6a — image preprocess for training OR prediction samples
-    prepare-visium-batches  Step 4   — build Visium training batch files
-    prepare-xenium-batches  Step 4x  — build Xenium training batch files
+    prepare-xenium          Step 3.5x — Xenium embeddings-hist (XEN samples)
+    prepare-visium-batches  Step 4   — build Visium training batch files (batch_vis_*.npy)
+    prepare-xenium-batches  Step 4x  — build Xenium training batch files (batch_xen_*.npy)
     train                   Step 5   — train MeowCat models
     predict                 Step 6b  — run full-grid prediction
     visualize               Step 6b  — visualize prediction outputs
@@ -71,16 +72,43 @@ def cmd_prepare_visium(cfg: MeowCatConfig, args: argparse.Namespace) -> None:
     (written by get_pixel_size.py, the first sub-step of 'meowcat preprocess',
     or created manually with the raw MPP value).
 
-    Non-Visium samples are skipped automatically by step 1.
+    Operates on Visium samples only (visium.sample_pattern). Xenium samples
+    get their embeddings-hist grid from 'meowcat prepare-xenium'.
     """
-    samples = _parse_samples(args.samples) or _pl._all_samples(cfg, None)
+    samples = _parse_samples(args.samples) or _pl._samples(cfg, None)
     if not samples:
-        print("[meowcat] No samples found. Check project.data_root and visium/xenium sample_pattern.")
-        sys.exit(1)
+        print("[meowcat] No Visium samples found (visium.sample_pattern) — skipping prepare-visium.")
+        return
 
     for sample in samples:
         print(f"\n[meowcat] Preparing Visium inputs: {sample}")
         for cmd in _pl.cmds_prepare_visium_sample(cfg, sample):
+            _run(cmd, args.dry_run)
+
+
+def cmd_prepare_xenium(cfg: MeowCatConfig, args: argparse.Namespace) -> None:
+    """
+    Step 4x-e — Xenium embeddings-hist preparation (per sample).
+
+    The Xenium counterpart of 'prepare-visium': converts each Xenium sample's
+    single_super_emb.h5ad into the dense embeddings-hist grid consumed by
+    full-grid prediction:
+      prepare_inference_new_sample.py — single_super_emb.h5ad -> embeddings-hist.pickle
+
+    Training uses the .obsm['histology_2048'] representation built by
+    'prepare-xenium-batches'; this builds the prediction representation.
+    Operates on Xenium samples only (xenium.sample_pattern). Requires
+    single_super_emb.h5ad and the processed he.<ext> image (both from
+    'meowcat preprocess') to exist in the sample directory.
+    """
+    samples = _parse_samples(args.samples) or _pl._xenium_samples(cfg, None)
+    if not samples:
+        print("[meowcat] No Xenium samples found (xenium.sample_pattern) — skipping prepare-xenium.")
+        return
+
+    for sample in samples:
+        print(f"\n[meowcat] Preparing Xenium embeddings-hist: {sample}")
+        for cmd in _pl.cmds_prepare_xenium_sample(cfg, sample):
             _run(cmd, args.dry_run)
 
 
@@ -197,8 +225,10 @@ def cmd_infer(cfg: MeowCatConfig, args: argparse.Namespace) -> None:
     """
     Run cell-type prediction on new H&E images using a trained model.
 
-    Chains: preprocess -> prepare-visium (embeddings) -> predict -> visualize
-    per sample, then generates a summary slide.
+    Chains: preprocess -> embeddings-hist conversion -> predict -> visualize
+    per sample, then generates a summary slide. The embeddings step converts
+    single_super_emb.h5ad -> embeddings-hist directly (no Visium metadata prep,
+    since new prediction samples have no RCTD/spatial data).
     """
     inf = cfg.inference
     if not inf.model_dir or not inf.anno_names:
@@ -256,10 +286,11 @@ def cmd_infer(cfg: MeowCatConfig, args: argparse.Namespace) -> None:
                 print(f"  [substep {step_num}/{len(cmds)}] {step_name}")
                 _run(cmd, args.dry_run)
 
-        # 2. Prepare embeddings (prepare-visium: step 1 skips for non-Visium, step 2 creates embeddings-hist.pickle)
+        # 2. Prepare embeddings — convert single_super_emb.h5ad -> embeddings-hist.
+        #    Inference on new H&E images has no RCTD/spatial metadata, so only the
+        #    (sample-type agnostic) conversion is needed, not the Visium metadata prep.
         print(f"\n[meowcat] Preparing embeddings: {sample}")
-        for cmd in _pl.cmds_prepare_visium_sample(cfg, sample):
-            _run(cmd, args.dry_run)
+        _run(_pl.cmd_prepare_embeddings(cfg, sample), args.dry_run)
 
         # 3. Predict
         print(f"\n[meowcat] Predicting: {sample}")
@@ -285,6 +316,7 @@ def cmd_run_all(cfg: MeowCatConfig, args: argparse.Namespace) -> None:
     cmd_preprocess(cfg, args)
     cmd_prepare_visium(cfg, args)
     cmd_prepare_visium_batches(cfg, args)
+    cmd_prepare_xenium(cfg, args)
     cmd_prepare_xenium_batches(cfg, args)
     cmd_train(cfg, args)
     cmd_predict(cfg, args)
@@ -316,8 +348,8 @@ def _build_parser() -> argparse.ArgumentParser:
     # steps with no extra args
     for name, help_text in [
         ("rctd",                    "Step 1: RCTD deconvolution (R)"),
-        ("prepare-visium-batches",  "Step 4: build Visium training batch files"),
-        ("prepare-xenium-batches",  "Step 4x: build Xenium training batch files"),
+        ("prepare-visium-batches",  "Step 4: build Visium training batches (batch_vis_*.npy)"),
+        ("prepare-xenium-batches",  "Step 4x: build Xenium training batches (batch_xen_*.npy)"),
         ("slim-xenium",             "Slim Xenium cellbin h5ad files (drop gene expression, keep histology)"),
         ("train",                   "Step 5: train MeowCat models"),
         ("slide",                   "Step 7: generate PowerPoint summary"),
@@ -328,7 +360,8 @@ def _build_parser() -> argparse.ArgumentParser:
     # steps that operate per-sample (or accept --samples filter)
     for name, help_text in [
         ("check-resolution",  "Step 2: audit H&E image resolutions"),
-        ("prepare-visium",    "Step 1.5: Visium metadata prep (anno_matrix, locs, radius files)"),
+        ("prepare-visium",    "Step 1.5: Visium metadata + embeddings-hist (VIS samples)"),
+        ("prepare-xenium",    "Step 3.5x: Xenium embeddings-hist (XEN samples)"),
         ("visualize-visium",  "Step 1.6: QC — overlay Visium spots on processed H&E image"),
         ("predict",           "Step 6b: run full-grid cell-type prediction"),
         ("visualize",         "Step 6b: visualize prediction outputs"),
@@ -383,6 +416,7 @@ _HANDLERS = {
     "infer":                    cmd_infer,
     "rctd":                     cmd_rctd,
     "prepare-visium":           cmd_prepare_visium,
+    "prepare-xenium":           cmd_prepare_xenium,
     "visualize-visium":         cmd_visualize_visium,
     "check-resolution":         cmd_check_resolution,
     "preprocess":               cmd_preprocess,

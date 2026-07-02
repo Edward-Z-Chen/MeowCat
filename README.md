@@ -152,7 +152,7 @@ Here is required structure for this `adata_cellbin_HistoSweep.h5ad` data:
 <data_root>/<SAMPLE>/
 ├── pixel-size-raw.txt       <- raw MPP from image metadata     (Step 3: get_pixel_size.py)
 ├── pixel-size.txt           <- target MPP                      (Step 3: prepare_visium_inputs.py)
-├── embeddings-hist.pickle   <- UNI features [H, W, C]          (Step 3: UNI_fuse_features.py)
+├── embeddings-hist.pickle   <- UNI features [H, W, C]          (Step 3.5: prepare-visium / prepare-xenium)
 ├── mask/
 │   ├── mask.png             <- tissue mask (full resolution)    (Step 3: RunHistoSweep.py)
 │   └── mask-small.png       <- tissue mask (downsampled)        (Step 3: RunHistoSweep.py)
@@ -241,14 +241,20 @@ meowcat preprocess --config config/my_run.yaml --samples GBM001,GBM002
 
 > **Mixed Visium + Xenium setups:** Leave `preprocess.pixel_size_raw: null` (default) so MPP is auto-detected per sample. To manually set MPP for a specific sample, create a `pixel-size-raw.txt` file in that sample's folder.
 
-### Step 3.5 — Visium Metadata Preparation
+### Step 3.5 — Embeddings & Visium Metadata Preparation
 
-*Visium only.* Prepares Visium-specific metadata from RCTD output and spatial positions.
+Both commands convert each sample's `single_super_emb.h5ad` into the dense `embeddings-hist.pickle` / `.npy` grid (`[H, W, C]`) that prediction consumes. They are split by modality so each only touches its own samples:
+
+- **`prepare-visium`** *(Visium samples only)* — embeddings-hist **plus** Visium-specific metadata (`anno-names.txt`, `anno_matrix.tsv`, `locs.tsv`, `radius.txt`) derived from RCTD output and spatial positions.
+- **`prepare-xenium`** *(Xenium samples only)* — embeddings-hist conversion only (Xenium cell-type labels come from `prepare-xenium-batches`).
 
 ```bash
 # activate he_anno, then:
-meowcat prepare-visium --config config/my_run.yaml
+meowcat prepare-visium --config config/my_run.yaml   # VIS samples
+meowcat prepare-xenium --config config/my_run.yaml   # XEN samples
 ```
+
+> **Mixed Visium + Xenium projects:** run **both** — `prepare-visium` handles only Visium samples, so Xenium samples need `prepare-xenium` to get their `embeddings-hist` grid for prediction.
 
 ### Step 4a — Visium Batch Preparation
 

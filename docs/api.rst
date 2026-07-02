@@ -73,7 +73,11 @@ Each returns a ``List[str]`` that ``cli.py`` passes to ``subprocess.run()``.
 
 .. autofunction:: meowcat.pipeline.cmds_preprocess_sample
 
+.. autofunction:: meowcat.pipeline.cmd_prepare_embeddings
+
 .. autofunction:: meowcat.pipeline.cmds_prepare_visium_sample
+
+.. autofunction:: meowcat.pipeline.cmds_prepare_xenium_sample
 
 .. autofunction:: meowcat.pipeline.cmd_visualize_visium
 

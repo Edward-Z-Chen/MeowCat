@@ -44,5 +44,6 @@ Expected Output
    │   └── states/00/model.ckpt, states/01/model.ckpt
    └── XEN_P11_LUAD/
        ├── Xenium_adata_cellbin_analysis_qv20.h5ad
+       ├── embeddings-hist.pickle or .npy  <- dense [H, W, C] grid (from prepare-xenium)
        ├── pred_fullgrid_outputs.pkl
        └── argmax_map.png

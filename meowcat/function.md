@@ -195,7 +195,7 @@ Returns 6 sequential sub-commands for one sample:
   - `<save_dir>/single_super_emb.h5ad` (when mode=`"single"`)
   - or `<save_dir>/multi_super_emb.h5ad` (when mode=`"multi"`)
 
-**⚠️ CRITICAL: The output is `single_super_emb.h5ad`, NOT `embeddings-hist.pickle`.** Downstream scripts (`batched_data_preparing.py`, `predict_cdan_multireso.py`) expect `embeddings-hist.pickle`. See Issue #1 below.
+**Note:** The output is `single_super_emb.h5ad`, NOT `embeddings-hist.pickle`. Downstream scripts (`batched_data_preparing.py`, `predict_cdan_multireso.py`) expect the dense `[H,W,C]` `embeddings-hist.pickle`/`.npy` grid, which is produced by a separate conversion step — `meowcat prepare-visium` (Visium samples) or `meowcat prepare-xenium` (Xenium samples).
 
 ---
 
@@ -243,7 +243,7 @@ Returns 6 sequential sub-commands for one sample:
   - `<OUT_DIR>/batch_vis_XXX_d.npy` — [N] int64 (domain IDs)
   - `<OUT_DIR>/batch_xen_XXX_x.npy` / `_y.npy` / `_d.npy` — (Xenium equivalents)
 
-**⚠️ See Issues #1, #3, #4 below.**
+**Note:** The `embeddings-hist` grid consumed here is built by `prepare-visium` (Visium) or `prepare-xenium` (Xenium).
 
 ---
 
@@ -277,7 +277,7 @@ Returns 6 sequential sub-commands for one sample:
   - `<prefix>/states/00/model.ckpt`, `<prefix>/states/01/model.ckpt`, ... (one per state)
   - Lightning logs and metrics inside each state directory
 
-**⚠️ Checkpoints are saved under `{cfg.batches.out_dir}/states/`. See Issue #2 below.**
+**Note:** Checkpoints are saved under `{cfg.batches.out_dir}/states/`.
 
 ---
 
@@ -287,22 +287,23 @@ Returns 6 sequential sub-commands for one sample:
 
 | Arg | pipeline.py passes | `predict_cdan_multireso.py` expects |
 |---|---|---|
-| positional `prefix` | `cfg.project.data_root` | Required — "Top-level PREFIX (contains states/*)" |
+| positional `prefix` | `cfg.batches.out_dir` | Required — top-level PREFIX (contains `states/*`) |
 | positional `n_states` | `cfg.predict.n_states` (default 2) | Required, int |
 | positional `sample_name` | sample name | Required, str |
+| `--data-root` | `cfg.project.data_root` | Optional — where per-sample data lives (falls back to `prefix`) |
 | `--device` | `cfg.predict.device` (default `"cuda"`) | Optional, str, default `"cuda"` |
 | `--tokens-per-chunk` | `cfg.predict.tokens_per_chunk` (default 70000) | Optional, int, default 16384 |
 | `--chunks-per-batch` | `cfg.predict.chunks_per_batch` (default 2) | Optional, int, default 1 |
-| `--out-pkl-name` | `cfg.predict.out_pkl_name` (default `"pred_fullgrid_outputs.pkl"`) | Optional, str, default `"pred_fullgrid_outputs_multires.pkl"` |
+| `--out-pkl-name` | `cfg.predict.out_pkl_name` (default `"pred_fullgrid_outputs.pkl"`) | Optional, str, default `"pred_fullgrid_outputs.pkl"` |
 
 - **Inputs (disk):**
-  - `<prefix>/states/00/model.ckpt` ... `<prefix>/states/<n-1>/model.ckpt` — trained checkpoints
-  - `<prefix>/<sample>/embeddings-hist.pickle` — [H,W,C] feature embeddings
-  - `<prefix>/<sample>/anno-names.txt` — cell-type names
+  - `<prefix>/states/00/model.ckpt` ... `<prefix>/states/<n-1>/model.ckpt` — trained checkpoints (from `cfg.batches.out_dir`)
+  - `<data_root>/<sample>/embeddings-hist.pickle` or `.npy` — [H,W,C] feature embeddings
+  - `<data_root>/<sample>/anno-names.txt` — cell-type names
 - **Outputs (disk):**
-  - `<prefix>/<sample>/<out_pkl_name>` — dict with `z_map [H,W,D]`, `p_map [H,W,K]`, `ctypes`, etc.
+  - `<data_root>/<sample>/<out_pkl_name>` — dict with `z_map [H,W,D]`, `p_map [H,W,K]`, `ctypes`, etc.
 
-**⚠️ CRITICAL: Pipeline passes `cfg.project.data_root` as prefix, but checkpoints are under `cfg.batches.out_dir/states/`. See Issue #2.**
+**Note:** Checkpoints are located via the positional prefix (`cfg.batches.out_dir`), and per-sample data via `--data-root` (`cfg.project.data_root`), so the two may live in different directories.
 
 ---
 
@@ -398,10 +399,12 @@ Raw H&E image + spatial data
    3.2  RunPreprocess      ──► he.jpg / he.tiff
    3.3  RunHistoSweep      ──► mask/mask.png, mask/mask-small.png
    3.4  UNI_extract        ──► local_emb.npy, global_emb.h5ad, coords.npy, ...
-   3.5  UNI_fuse           ──► single_super_emb.h5ad          ◄── ⚠️ NOT embeddings-hist.pickle
-   3.6  prepare_visium     ──► anno-names.txt, anno_matrix.tsv, locs.tsv, radius.txt
+   3.5  UNI_fuse           ──► single_super_emb.h5ad
         │
-        │  ⚠️ MISSING STEP: convert single_super_emb.h5ad → embeddings-hist.pickle
+        ▼
+[Step 3.5] Embeddings-hist + Visium metadata (separate commands, split by modality):
+   prepare-visium (VIS) ──► embeddings-hist.pickle/.npy + anno-names.txt, anno_matrix.tsv, locs.tsv, radius.txt
+   prepare-xenium (XEN) ──► embeddings-hist.pickle/.npy
         │
         ▼
 [Step 4] batched_data_preparing ──► batch_vis_*_x/y/d.npy, batch_xen_*_x/y/d.npy
@@ -409,8 +412,8 @@ Raw H&E image + spatial data
         ▼
 [Step 5] train             ──► {batches.out_dir}/states/XX/model.ckpt
         │
-        ▼                         ⚠️ predict looks for checkpoints under data_root,
-[Step 6] predict           ──► pred_fullgrid_outputs.pkl       but they're under batches.out_dir
+        ▼
+[Step 6] predict           ──► pred_fullgrid_outputs.pkl
         │
         ▼
 [Step 6] visualize         ──► argmax_map.png, intensity maps, cluster maps
@@ -418,157 +421,3 @@ Raw H&E image + spatial data
         ▼
 [Step 7] slide_wrap        ──► results.pptx
 ```
-
----
-
-## Issues Found
-
-### Issue #1 — CRITICAL: Missing `embeddings-hist.pickle` conversion step
-
-**What:** `UNI_fuse_features.py` (sub-step 3.5) outputs `single_super_emb.h5ad`, but downstream
-consumers (`batched_data_preparing.py` line 118, `predict_cdan_multireso.py` line 69) expect
-`embeddings-hist.pickle` (a numpy array of shape `[H, W, C]`).
-
-**Where the converter exists:** `prepare_inference_new_sample.py` and `prepare_inference_inputs_training.py`
-both convert `single_super_emb.h5ad` → `embeddings-hist.pickle`. However, **neither is called
-anywhere in `pipeline.py` or `cli.py`**.
-
-**Impact:** The pipeline will fail at Step 4 (batch preparation) and Step 6 (prediction) because
-`embeddings-hist.pickle` is never created.
-
-**Suggestion:** Add a sub-step after `UNI_fuse_features` to convert `single_super_emb.h5ad` →
-`embeddings-hist.pickle`. Either:
-- Integrate the conversion from `prepare_inference_new_sample.py` as a new pipeline function, or
-- Add the conversion logic as a 7th sub-step in `cmds_preprocess_sample()`.
-
----
-
-### Issue #2 — CRITICAL: Prediction prefix mismatch (checkpoints vs. sample data)
-
-**What:** The `predict_cdan_multireso.py` script uses a single `prefix` positional argument for
-BOTH locating checkpoints (`{prefix}/states/XX/model.ckpt`) AND sample data
-(`{prefix}/{sample}/embeddings-hist.pickle`).
-
-- **Training** saves checkpoints to `{cfg.batches.out_dir}/states/XX/model.ckpt`
-- **Prediction** pipeline passes `cfg.project.data_root` as prefix
-
-Unless `cfg.batches.out_dir == cfg.project.data_root`, the predict script will NOT find the
-checkpoints.
-
-**Impact:** Prediction will fail with `FileNotFoundError: Missing checkpoint` unless the user
-manually ensures batch output dir equals data root.
-
-**Suggestion:** Either:
-- Pass `cfg.batches.out_dir` as the prefix to predict (but then sample data won't be found
-  unless samples are also under `batches.out_dir`), or
-- Add a separate `--ckpt-prefix` argument to the predict script so checkpoints and sample data
-  can live in different directories, or
-- Add a `predict.ckpt_dir` config field that defaults to `{batches.out_dir}`.
-
----
-
-### Issue #3 — `batched_data_preparing.py` has hardcoded paths and imports
-
-**What:** The batch preparation script has:
-- Line 6: `sys.path.append('/home/liranmao/06_he_anno/code/1_main_lung_cancer/')` — hardcoded absolute path
-- Lines 48–50: `from utils import ...`, `from impute_by_basic import ...`, `from image import ...` — these
-  modules are NOT inside the MeowCat package; they rely on the hardcoded `sys.path`
-- Line 91: `list_sample_dirs()` filters samples with `d.startswith("P")` — hardcoded to "P" prefix,
-  ignoring `cfg.project.sample_pattern`
-- Line 410: hardcoded Xenium data path `/project/KidneyHE/data_lung/00_luad_xenium/...`
-
-**Impact:** Script will fail on any machine without the hardcoded paths. Sample discovery ignores
-the config's `sample_pattern`, so non-"P"-prefixed samples are silently skipped.
-
-**Suggestion:** Refactor the script to:
-- Use relative imports from the MeowCat package (or inline the needed helpers)
-- Use `cfg.project.sample_pattern` for sample discovery instead of hardcoded "P" prefix
-- Parameterize any Xenium data paths via config
-
----
-
-### Issue #4 — `out_pkl_name` default mismatch between config and script
-
-**What:**
-- `config.py` PredictConfig: `out_pkl_name = "pred_fullgrid_outputs.pkl"`
-- `predict_cdan_multireso.py` argparse default: `"pred_fullgrid_outputs_multires.pkl"`
-
-**Impact:** Low — when using the CLI with a config, the config value is used explicitly. But if
-someone runs the predict script directly without `--out-pkl-name`, they get a different filename
-than the config default, which could confuse downstream visualization.
-
-**Suggestion:** Align the defaults. Either change the script default to match the config, or
-vice versa.
-
----
-
-### Issue #5 — `batches.domain_map_tsv` and `batches.fixed_radius` not wired
-
-**What:** `config.py` defines `BatchesConfig.domain_map_tsv` and `BatchesConfig.fixed_radius`, but
-`batched_data_preparing.py`'s YAML override block (lines 22–37) does NOT read these fields from
-the config.
-
-**Impact:** Setting `domain_map_tsv` or `fixed_radius` in the YAML config has no effect.
-
-**Suggestion:** Add config override lines for these fields in `batched_data_preparing.py`.
-
----
-
-### Issue #6 — `batches.radius_multiplier` not consumed anywhere
-
-**What:** `config.py` defines `BatchesConfig.radius_multiplier = 2.0`, but this field is not
-referenced in `pipeline.py`, `cli.py`, or `batched_data_preparing.py`.
-
-**Impact:** Dead config field.
-
-**Suggestion:** Either wire it into `batched_data_preparing.py` or remove it from the config.
-
----
-
-### Issue #7 — `prepare_visium_inputs.py` runs unconditionally in preprocessing
-
-**What:** `cmds_preprocess_sample()` includes `prepare_visium_inputs.py` as the 6th sub-step for
-EVERY sample, even non-Visium ones. The script handles this gracefully (skips if RCTD output is
-missing), but it adds an unnecessary subprocess call.
-
-**Impact:** Low — functional but slightly wasteful.
-
----
-
-### Issue #8 — `run-all` does not handle the predict/checkpoint path issue
-
-**What:** `cmd_run_all` calls `cmd_predict` which passes `data_root` as prefix. After training
-saves checkpoints to `{batches.out_dir}/states/`, predict cannot find them unless the two dirs
-coincide.
-
-**Impact:** `meowcat run-all` will fail at the prediction step (same as Issue #2).
-
----
-
-### Issue #9 — Training script args with different defaults
-
-**What:** Several argument defaults differ between `config.py` and the training script:
-- `n_states`: config=2, script=5
-- `xenium_weight`: config=0.01, script=1.0
-- `monitor_metric`: config=`"val_weak_mse"`, script=`"val_loss"`
-- `xenium_epochs`: config=100, script=50
-- `recon_weight`: config=0.1, script=0.0
-
-**Impact:** None when using the CLI (config values are passed explicitly). But running the training
-script directly without these flags would yield different behavior than the documented config defaults.
-
-**Suggestion:** Align script defaults with config defaults for consistency.
-
----
-
-### Issue #10 — `predict_cdan_multireso.py` imports from `train_by_batch_cdan5_trainc`
-
-**What:** Line 44: `from train_by_batch_cdan5_trainc import MultiResolutionModel`. The actual
-training script filename is `train_by_batch_cdan5_trainc_final2.py`. The import uses a different
-module name (`train_by_batch_cdan5_trainc` without `_final2`).
-
-**Impact:** This import will fail unless there's a separate `train_by_batch_cdan5_trainc.py` file
-(not `_final2`) or a symlink. The predict script won't run at all.
-
-**Suggestion:** Fix the import to match the actual training script filename, or ensure the module
-it references exists.

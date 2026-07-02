@@ -69,6 +69,17 @@ echo "[Step 4] Xenium batch preparation"
 meowcat prepare-xenium-batches --config "$CFG"
 
 # ---------------------------------------------------------------------------
+# Step 4b: Xenium embeddings-hist (Xenium counterpart of prepare-visium)
+# Full-grid prediction needs the dense [H,W,C] embeddings-hist grid, which the
+# training path (histology_2048) does not create. This converts each sample's
+# single_super_emb.h5ad -> embeddings-hist.pickle (reads the processed he.<ext>
+# image written by 'meowcat preprocess'). Only depends on preprocess outputs,
+# so it can run before training.
+# ---------------------------------------------------------------------------
+echo "[Step 4b] Xenium embeddings-hist"
+meowcat prepare-xenium --config "$CFG"
+
+# ---------------------------------------------------------------------------
 # Step 5: Train the model
 # Phases:  Phase 0 (recon, 15 ep) -> Phase 1 (Xenium CE, 100 ep)
 # The model operates in sc_only mode (no batch_vis_* files present).

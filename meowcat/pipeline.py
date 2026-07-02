@@ -29,6 +29,17 @@ def _samples(cfg: MeowCatConfig, override: Optional[List[str]]) -> List[str]:
     return [os.path.basename(m) for m in matches if os.path.isdir(m)]
 
 
+def _xenium_samples(cfg: MeowCatConfig, override: Optional[List[str]]) -> List[str]:
+    """Return Xenium sample names: CLI override > glob via xenium.sample_pattern."""
+    if override:
+        return override
+    xen_pat = cfg.xenium.sample_pattern
+    if not xen_pat:
+        return []
+    pattern = os.path.join(cfg.project.data_root, xen_pat)
+    return [os.path.basename(m) for m in sorted(_glob.glob(pattern)) if os.path.isdir(m)]
+
+
 def _all_samples(cfg: MeowCatConfig, override: Optional[List[str]]) -> List[str]:
     """Discover both Visium + Xenium samples."""
     if override:
@@ -140,6 +151,25 @@ def cmds_preprocess_sample(cfg: MeowCatConfig, sample: str) -> List[List[str]]:
             extract_features, fuse_features]
 
 
+# ── Shared — embeddings-hist conversion (sample-type agnostic) ────────────────
+def cmd_prepare_embeddings(cfg: MeowCatConfig, sample: str) -> List[str]:
+    """
+    Convert one sample's single_super_emb.h5ad into the dense [H, W, C]
+    embeddings-hist grid (embeddings-hist.pickle, or .npy for large grids)
+    consumed by full-grid prediction.
+
+    Sample-type agnostic: reads only the processed 'he' image (for grid
+    dimensions) and single_super_emb.h5ad, both produced by 'meowcat
+    preprocess'. Shared by prepare-visium (VIS), prepare-xenium (XEN), and
+    infer (new prediction samples).
+    """
+    return [
+        "python", "-u", _pkg("Preprocess/prepare_inference_new_sample.py"),
+        cfg.project.data_root,
+        sample,
+    ]
+
+
 # ── Step 1.5 — Visium-specific input preparation (per sample) ─────────────────
 def cmds_prepare_visium_sample(cfg: MeowCatConfig, sample: str) -> List[List[str]]:
     """
@@ -161,13 +191,27 @@ def cmds_prepare_visium_sample(cfg: MeowCatConfig, sample: str) -> List[List[str
         "--target_mpp", str(cfg.preprocess.target_mpp),
     ]
 
-    prepare_embeddings = [
-        "python", "-u", _pkg("Preprocess/prepare_inference_new_sample.py"),
-        data_root,
-        sample,
-    ]
+    return [prepare_visium, cmd_prepare_embeddings(cfg, sample)]
 
-    return [prepare_visium, prepare_embeddings]
+
+# ── Step 3.5x — Xenium embeddings-hist preparation ────────────────────────────
+def cmds_prepare_xenium_sample(cfg: MeowCatConfig, sample: str) -> List[List[str]]:
+    """
+    Prepare the Xenium embeddings-hist grid for one sample (Xenium counterpart
+    of cmds_prepare_visium_sample's embeddings step).
+
+    Xenium *training* consumes .obsm['histology_2048'] (built by
+    prepare-xenium-batches), but full-grid *prediction*
+    (predict_cdan_multireso.py) needs the dense [H, W, C] embeddings-hist grid.
+    This converts single_super_emb.h5ad -> embeddings-hist.pickle (or .npy for
+    large grids), reading the processed 'he' image (written by
+    'meowcat preprocess') to size the grid — the same converter the Visium
+    embeddings step uses.
+
+    Requires single_super_emb.h5ad and he.<ext> to already exist in the sample
+    folder (both produced by 'meowcat preprocess').
+    """
+    return [cmd_prepare_embeddings(cfg, sample)]
 
 
 # ── Step 1.6 — Visium QC visualization ────────────────────────────────────────

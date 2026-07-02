@@ -143,14 +143,29 @@ Data-agnostic — works identically for Visium and Xenium. Rescales images, gene
    # 3=run_histosweep, 4=extract_features, 5=fuse_features):
    meowcat preprocess --config config/my_run.yaml --start-from 4
 
-Step 3.5 — Visium Metadata Preparation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Step 3.5 — Embeddings & Visium Metadata Preparation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-*Visium only.* Prepares metadata from RCTD output and spatial positions, and writes ``embeddings-hist.pickle`` or ``.npy``.
+Both commands convert each sample's ``single_super_emb.h5ad`` into the dense
+``embeddings-hist.pickle`` / ``.npy`` grid (``[H, W, C]``) consumed by
+prediction. They are split by modality so each only touches its own samples:
+
+- ``prepare-visium`` *(Visium samples only)* — embeddings-hist **plus**
+  Visium-specific metadata (``anno-names.txt``, ``anno_matrix.tsv``,
+  ``locs.tsv``, ``radius.txt``) derived from RCTD output and spatial positions.
+- ``prepare-xenium`` *(Xenium samples only)* — embeddings-hist conversion only
+  (Xenium cell-type labels come from ``prepare-xenium-batches``).
 
 .. code-block:: bash
 
-   meowcat prepare-visium --config config/my_run.yaml
+   meowcat prepare-visium --config config/my_run.yaml   # VIS samples
+   meowcat prepare-xenium --config config/my_run.yaml   # XEN samples
+
+.. note::
+
+   For mixed Visium + Xenium projects, run **both** — ``prepare-visium`` handles
+   only Visium samples, so Xenium samples need ``prepare-xenium`` to get their
+   ``embeddings-hist`` grid for prediction.
 
 Step 4a — Visium Batch Preparation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

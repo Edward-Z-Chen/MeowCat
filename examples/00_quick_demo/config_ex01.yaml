@@ -1,0 +1,79 @@
+# Quick-demo config: Example 1 (Visium train + impute) from pre-extracted features.
+# Paths use the placeholder __DEMO_DIR__ which run_quick_demo.sh substitutes with
+# the absolute path of this folder at runtime. Do not edit the placeholder.
+#
+# The demo bundle already ships single_super_emb.h5ad, so the slow
+# UNI feature-extraction stage is skipped. `preprocess.uni_weights` is only
+# needed if you re-run `meowcat preprocess` on new samples.
+
+project:
+  name: quick_demo_ex01
+  data_root: __DEMO_DIR__/ex01/input
+  out_root:  __DEMO_DIR__/ex01/output
+
+visium:
+  sample_pattern: "VIS*"
+  keep_frac: 1.0
+  strategy: stratified
+  seed: 0
+
+rctd:
+  reference_rds: /NOT_NEEDED_DEMO_USES_PRECOMPUTED_RCTD
+  cell_type_column: MainType
+  group_column: Group_ID
+  groups: [LUAD]
+  max_cores: 10
+  doublet_mode: full
+  min_umi: 10
+
+preprocess:
+  raw_flag: he_raw
+  target_mpp: 0.5
+  pixel_size_raw: 0.2513
+  pad: 224
+  uni_weights: /path/to/vit_large_patch16_224.dinov2.uni_mass100k/pytorch_model.bin
+  fusion_mode: single
+
+batches:
+  out_dir: __DEMO_DIR__/ex01/output/batches
+
+train:
+  n_states: 2
+  two_stage: true
+  epochs1: 15
+  sequential_training: false
+  visium_epochs: 100
+  xenium_epochs: 0
+  adv_lambda: 0
+  freeze_encoder_n: 2
+  recon_weight: 0.1
+  recon_mask_ratio: 0.3
+  save_every_n_epochs: 10
+  xenium_weight: 0.0
+  monitor_metric: val_weak_mse
+  oos_sample: null
+  oos_tmpdir: null
+  device: cuda
+
+predict:
+  n_states: 2
+  tokens_per_chunk: 70000
+  chunks_per_batch: 2
+  out_pkl_name: pred_fullgrid_outputs.pkl
+  device: cuda
+
+visualize:
+  n_clusters: 6
+  pca_comp: 100
+  random_seed: 0
+  p_lo: 5
+  p_hi: 95
+  save_highlights: false
+  cmap_json: null
+
+slide:
+  pptx: results_ex01.pptx
+  intensity_cols: 3
+  intensity_rows: 2
+  highlight_cols: 4
+  highlight_rows: 3

@@ -1,0 +1,49 @@
+# Quick-demo config: Example 6 (predict on new H&E) from pre-extracted features.
+# Paths use the placeholder __DEMO_DIR__ which run_quick_demo.sh substitutes with
+# the absolute path of this folder at runtime. Do not edit the placeholder.
+#
+# The demo bundle ships single_super_emb.h5ad and a trained model. `meowcat
+# infer` regenerates embeddings-hist from single_super_emb before predicting.
+
+inference:
+  model_dir:  __DEMO_DIR__/ex06/model
+  anno_names: __DEMO_DIR__/ex06/model/anno-names.txt
+
+project:
+  name: quick_demo_ex06
+  data_root: __DEMO_DIR__/ex06/input
+  out_root:  __DEMO_DIR__/ex06/output
+
+visium:
+  sample_pattern: "P*"
+
+preprocess:
+  raw_flag: he_raw
+  target_mpp: 0.5
+  pixel_size_raw: 0.5
+  pad: 224
+  uni_weights: /path/to/vit_large_patch16_224.dinov2.uni_mass100k/pytorch_model.bin
+  fusion_mode: single
+
+predict:
+  n_states: 2
+  tokens_per_chunk: 70000
+  chunks_per_batch: 2
+  out_pkl_name: pred_fullgrid_outputs.pkl
+  device: cuda
+
+visualize:
+  n_clusters: 6
+  pca_comp: 100
+  random_seed: 0
+  p_lo: 5
+  p_hi: 95
+  save_highlights: false
+  cmap_json: null
+
+slide:
+  pptx: results_ex06.pptx
+  intensity_cols: 3
+  intensity_rows: 2
+  highlight_cols: 4
+  highlight_rows: 3

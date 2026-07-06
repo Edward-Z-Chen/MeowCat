@@ -12,6 +12,12 @@ Datasets for demo usage can be downloaded in: [10.5281/zenodo.20337757](https://
 
 Trained weights for lung cancer, Kidney, GBM and atherosclerosis can be downloaded in: https://huggingface.co/liranmao/MeowCat-Models. 
 
+One line demo run after you have set up the environment:
+```bash
+conda activate he_anno
+bash ./examples/00_quick_demo/run_quick_demo.sh > run_log.txt 2>&1 &
+```
+
 
 ## Table of Contents
 1. [Examples](#examples)

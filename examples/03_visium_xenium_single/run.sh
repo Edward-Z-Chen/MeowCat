@@ -80,23 +80,23 @@ echo "============================================"
 # For Xenium, prepare-xenium-batches (Step 4b) will automatically merge
 # histology features from single_super_emb.h5ad into the cellbin.
 # ---------------------------------------------------------------------------
-# echo "[Step 3] Image preprocessing — all samples (VIS* + XEN*)"
-# meowcat preprocess --config "$CFG"
+echo "[Step 3] Image preprocessing — all samples (VIS* + XEN*)"
+meowcat preprocess --config "$CFG"
 
 # ---------------------------------------------------------------------------
 # Step 3.5: Prepare Visium metadata + embeddings
 # Creates: anno-names.txt, anno_matrix.tsv, locs.tsv, radius.txt,
 #          pixel-size.txt, embeddings-hist.pickle or .npy
 # ---------------------------------------------------------------------------
-# echo "[Step 3.5] Visium metadata preparation"
-# meowcat prepare-visium --config "$CFG"
+echo "[Step 3.5] Visium metadata preparation"
+meowcat prepare-visium --config "$CFG"
 
 # ---------------------------------------------------------------------------
 # Step 4a: Build Visium training batches (batch_vis_*_x/y/d.npy)
 # Activate: conda activate he_anno
 # ---------------------------------------------------------------------------
-# echo "[Step 4a] Visium batch preparation"
-# meowcat prepare-visium-batches --config "$CFG"
+echo "[Step 4a] Visium batch preparation"
+meowcat prepare-visium-batches --config "$CFG"
 
 # ---------------------------------------------------------------------------
 # Step 4b: Build Xenium training batches (batch_xen_*_x/y/d.npy)
